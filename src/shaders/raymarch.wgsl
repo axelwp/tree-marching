@@ -25,6 +25,27 @@ fn sdCapsule(p: vec3f, a: vec3f, b: vec3f, r: f32) -> f32 {
     return length(pa - ba * h) - r;
 }
 
+fn sdRoundCone(p: vec3f, a: vec3f, b: vec3f, ra: f32, rb: f32) -> f32 {
+    let ba = b - a;
+    let l2 = dot(ba, ba);
+    let rr = ra - rb;
+    let a2 = l2 - rr * rr;
+    let il2 = 1.0 / l2;
+
+    let pa = p - a;
+    let y = dot(pa, ba);
+    let z = y - l2;
+    let xp = pa * l2 - ba * y;
+    let x2 = dot(xp, xp);
+    let y2 = y * y* l2;
+    let z2 = z * z * l2;
+
+    let k = sign(rr) * rr * rr * x2;
+    if (sign(z) * a2 * z2 > k) {return sqrt(x2 + z2) * il2 -rb; }
+    if (sign(y) * a2 * y2 < k) {return sqrt(x2 + y2) * il2 - ra; }
+    return (sqrt(x2 * a2 * il2) + y * rr) *il2 - ra;
+}
+
 fn smin(a: f32, b: f32, k: f32) -> f32 { // where k is the blend radius
     let h = max(k - abs(a - b), 0.0) / k;
     return min(a, b) - h * h * k * 0.25;
@@ -33,8 +54,9 @@ fn smin(a: f32, b: f32, k: f32) -> f32 { // where k is the blend radius
 fn sdScene(p: vec3f) -> f32 {
     //let c = vec3f(0.0, sin(u.time) * 0.5, 0.0);
     let sphere = sdSphere(p, vec3f(0.0, 0.0, 0.0), 0.8);
-    let capsule = sdCapsule(p, vec3f(-1.0, -1.0, 0), vec3f(0.8, 1.0, 0.0), 0.2);
-    return smin(sphere, capsule, 0.3);
+    //let capsule = sdCapsule(p, vec3f(-1.0, -1.0, 0), vec3f(0.8, 1.0, 0.0), 0.2);
+    let roundCone = sdRoundCone(p, vec3f(-1.0, -1.0, 0.0), vec3f(0.8, 1.0, 0.0), 0.6, 0.1);
+    return smin(sphere, roundCone, 0.3);
 }
 
 fn getNormal(p: vec3f) -> vec3f {
