@@ -1,5 +1,5 @@
 import './style.css'
-import shaderSource from './shaders/fullscreen.wgsl?raw' 
+import shaderSource from './shaders/raymarch.wgsl?raw' 
 
 const canvas = document.getElementById('canvas') as HTMLCanvasElement;
 console.log(canvas)
