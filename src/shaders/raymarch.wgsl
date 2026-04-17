@@ -18,9 +18,23 @@ fn sdSphere(p: vec3f, c: vec3f, r: f32) -> f32 {
     return length(p - c) - r;
 }
 
+fn sdCapsule(p: vec3f, a: vec3f, b: vec3f, r: f32) -> f32 {
+    let pa = p - a;
+    let ba = b - a;
+    let h = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0);
+    return length(pa - ba * h) - r;
+}
+
+fn smin(a: f32, b: f32, k: f32) -> f32 { // where k is the blend radius
+    let h = max(k - abs(a - b), 0.0) / k;
+    return min(a, b) - h * h * k * 0.25;
+}
+
 fn sdScene(p: vec3f) -> f32 {
-    let c = vec3f(0.0, sin(u.time) * 0.5, 0.0);
-    return sdSphere(p, c, 1.0);
+    //let c = vec3f(0.0, sin(u.time) * 0.5, 0.0);
+    let sphere = sdSphere(p, vec3f(0.0, 0.0, 0.0), 0.8);
+    let capsule = sdCapsule(p, vec3f(-1.0, -1.0, 0), vec3f(0.8, 1.0, 0.0), 0.2);
+    return smin(sphere, capsule, 0.3);
 }
 
 fn getNormal(p: vec3f) -> vec3f {
