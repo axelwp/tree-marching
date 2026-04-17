@@ -19,7 +19,8 @@ fn sdSphere(p: vec3f, c: vec3f, r: f32) -> f32 {
 }
 
 fn sdScene(p: vec3f) -> f32 {
-    return sdSphere(p, vec3f(0.0), 1.0);
+    let c = vec3f(0.0, sin(u.time) * 0.5, 0.0);
+    return sdSphere(p, c, 1.0);
 }
 
 fn getNormal(p: vec3f) -> vec3f {
@@ -31,11 +32,19 @@ fn getNormal(p: vec3f) -> vec3f {
     ));
 }
 
+struct Uniforms {
+    time: f32,
+    resolution: vec2f,
+}
+
+@group(0) @binding(0) var<uniform> u: Uniforms;
+
+
 fn march(ro: vec3f, rd: vec3f) -> f32 {
     var t = 0.0;
     for(var i = 0; i < 64; i++){
         let p = ro + rd * t;
-        let d = sdSphere(p, vec3f(0.0), 1.0);
+        let d = sdScene(p);
         if (d < 0.001) { return t; } // hit
         if (t > 20.0) { break; } // too far 
         t += d;
@@ -48,7 +57,7 @@ fn march(ro: vec3f, rd: vec3f) -> f32 {
 fn fs(in: VSOut) -> @location(0) vec4f {
     var ndc = in.uv * 2.0 - 1.0;
 
-    var aspect = 16.0 / 9.0; // using hardcoded 16:9 for now
+    var aspect = u.resolution.x / u.resolution.y; // using hardcoded 16:9 for now
     ndc.x *= aspect; 
 
     var camera = vec3f(0, 0, -3); // camera, looking down at +z
