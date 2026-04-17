@@ -3,6 +3,26 @@ struct VSOut {
     @location(0) uv: vec2f,
 }
 
+struct Uniforms {
+    time: f32,          //offset 0
+    resolution: vec2f,  //offset 4
+    // rounds up to 16 bytes
+}
+
+@group(0) @binding(0) var<uniform> u: Uniforms;
+
+struct Branch {
+    a: vec3f,       // offset 0
+    ra: f32,        //offset 12
+    b: vec3f,       //offset 16
+    rb: f32,        //offset 28
+    growth: f32,    //offset 32
+    spawnTime: f32  //offset 36
+    // rounds up to 48 bytes
+}
+
+@group(0) @binding(1) var<storage, read> branches: array<Branch>;
+
 //using a quad here for the "screen" instead of a triangle to make computation more efficient.
 @vertex
 fn vs(@builtin(vertex_index) i: u32) -> VSOut {
@@ -52,26 +72,13 @@ fn smin(a: f32, b: f32, k: f32) -> f32 { // where k is the blend radius
 }
 
 fn sdScene(p: vec3f) -> f32 {
-    // build the trunk
-    var d = sdRoundCone(p, vec3f(0, -1.5, 0), vec3f(0, 1.5f, 0), 0.25, 0.15);
-
-    //lowest branch
-    var b1 = sdRoundCone(p, vec3f(0, -0.2, 0), vec3f(1.2, 0.5, 0.2), 0.17, 0.02);
-    d = smin(d,b1, 0.05);
-
-    //offshoot from lowest branch
-    var b12 = sdRoundCone(p, vec3f(0.6, 0.1, 0.1), vec3f(1.1, 0, -0.2), 0.08, 0.02);
-    d = smin(d,b12, 0.05);
-
-    var b2 = sdRoundCone(p, vec3f(0, 0.3, 0), vec3f(-1.2, 0.8, 0.2), 0.14, 0.02);
-    d = smin(d,b2, 0.05);
-
-    var b3 = sdRoundCone(p, vec3f(0, 1.4f, 0), vec3f(0.5, 2.1f, -0.1), 0.1, 0.02);
-    d = smin(d,b3, 0.05);
-
-    var b4 = sdRoundCone(p, vec3f(0, 1.4f, 0), vec3f(-0.4, 2.3f, -0.08), 0.11, 0.02);
-    d = smin(d,b4, 0.05);
-
+    let n = arrayLength(&branches);
+    var d = sdRoundCone(p, branches[0].a, branches[0].b, branches[0].ra, branches[0].rb);
+    for (var i = 1u; i < n; i++){
+        let br = branches[i];
+        let b = sdRoundCone(p, br.a, br.b, br.ra, br.rb);
+        d = smin(d, b, 0.05);
+    }
     return d;
 }
 
@@ -96,13 +103,6 @@ fn getNormal(p: vec3f) -> vec3f {
         sdScene(p + vec3f(0, 0, e)) - sdScene(p - vec3f(0, 0, e)),
     ));
 }
-
-struct Uniforms {
-    time: f32,
-    resolution: vec2f,
-}
-
-@group(0) @binding(0) var<uniform> u: Uniforms;
 
 
 fn march(ro: vec3f, rd: vec3f) -> f32 {
