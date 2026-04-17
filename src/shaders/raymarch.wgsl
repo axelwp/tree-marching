@@ -52,11 +52,40 @@ fn smin(a: f32, b: f32, k: f32) -> f32 { // where k is the blend radius
 }
 
 fn sdScene(p: vec3f) -> f32 {
-    //let c = vec3f(0.0, sin(u.time) * 0.5, 0.0);
-    let sphere = sdSphere(p, vec3f(0.0, 0.0, 0.0), 0.8);
-    //let capsule = sdCapsule(p, vec3f(-1.0, -1.0, 0), vec3f(0.8, 1.0, 0.0), 0.2);
-    let roundCone = sdRoundCone(p, vec3f(-1.0, -1.0, 0.0), vec3f(0.8, 1.0, 0.0), 0.6, 0.1);
-    return smin(sphere, roundCone, 0.3);
+    // build the trunk
+    var d = sdRoundCone(p, vec3f(0, -1.5, 0), vec3f(0, 1.5f, 0), 0.25, 0.15);
+
+    //lowest branch
+    var b1 = sdRoundCone(p, vec3f(0, -0.2, 0), vec3f(1.2, 0.5, 0.2), 0.17, 0.02);
+    d = smin(d,b1, 0.05);
+
+    //offshoot from lowest branch
+    var b12 = sdRoundCone(p, vec3f(0.6, 0.1, 0.1), vec3f(1.1, 0, -0.2), 0.08, 0.02);
+    d = smin(d,b12, 0.05);
+
+    var b2 = sdRoundCone(p, vec3f(0, 0.3, 0), vec3f(-1.2, 0.8, 0.2), 0.14, 0.02);
+    d = smin(d,b2, 0.05);
+
+    var b3 = sdRoundCone(p, vec3f(0, 1.4f, 0), vec3f(0.5, 2.1f, -0.1), 0.1, 0.02);
+    d = smin(d,b3, 0.05);
+
+    var b4 = sdRoundCone(p, vec3f(0, 1.4f, 0), vec3f(-0.4, 2.3f, -0.08), 0.11, 0.02);
+    d = smin(d,b4, 0.05);
+
+    return d;
+}
+
+fn softShadow(ro: vec3f, rd: vec3f, maxt: f32, k: f32) -> f32 { // k controls penumbra softness (higher k -> harder shadows)
+    var res = 1.0;
+    var t = 0.02;
+    for (var i = 0; i < 32; i++) {
+        let h = sdScene(ro + rd * t);
+        if (h < 0.001) { return 0.0; }
+        res = min(res, k * h / t);
+        t += h;
+        if (t > maxt) { break; }
+    }
+    return clamp(res, 0.0, 1.0);
 }
 
 fn getNormal(p: vec3f) -> vec3f {
@@ -107,8 +136,10 @@ fn fs(in: VSOut) -> @location(0) vec4f {
     let p = camera + pinhole * t;
     let n = getNormal(p);
 
+    
     let lightDir = normalize(vec3f(0.3, 0.3, -0.1)); //directional light
-    let diffuse = max(dot(n, lightDir), 0.1); //ambient light
+    let shadow = softShadow(p + n * 0.1, lightDir, 20.0, 11.0);
+    let diffuse = max(dot(n, lightDir), 0.0) * shadow + 0.1; //ambient light
 
     return vec4f(vec3f(diffuse), 1.0); // [-1, 1] -> [0, 1]
 }
