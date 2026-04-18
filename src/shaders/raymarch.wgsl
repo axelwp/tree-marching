@@ -117,15 +117,25 @@ fn getNormal(p: vec3f) -> vec3f {
 
 
 fn march(ro: vec3f, rd: vec3f) -> f32 {
-    var t = 0.0;
-    for(var i = 0; i < 64; i++){
-        let p = ro + rd * t;
-        let d = sdScene(p);
-        if (d < 0.001) { return t; } // hit
-        if (t > 20.0) { break; } // too far 
+    let scenceCenter = vec3f(0.0, 0.5, 0.0);
+    let sceneRadius = 3.0;
+    let oc = ro - scenceCenter;
+    let b = dot(oc, rd);
+    let c = dot(oc, oc) - sceneRadius * sceneRadius;
+    let h = b * b - c;
+    if (h < 0.0) { return -1.0; }   //ray completely misses the sceneRadius
+
+    let sq = sqrt(h);
+    var t = max(0.0, -b - sq);      // advance to near surface
+    var tMax = min(20.0, -b + sq);  // don't need to march past far surfaces
+
+    for( var i = 0; i < 64; i++) {
+        if (t > tMax) { break; }
+        let d = sdScene(ro + rd * t);
+        if (d < 0.001) { return t; }
         t += d;
     }
-    return -1.0; // miss
+    return -1;
 }
 
 
