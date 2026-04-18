@@ -1,3 +1,7 @@
+import { type Vec3, scale, add, anyPerpendicular, rotateAroundAxis } from "../lib/vec3"
+
+
+const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5)) // ≈ 137.5° 
 // matches Branch struct in ../shaders/raymarch.wgsl
 export type Branch = {
     a: [number, number, number]
@@ -25,6 +29,7 @@ export function packBranches(branches: Branch[]): Float32Array {
 
 
 // hardcoded from example tree in raymarch.wgsl
+/*
 export function generateTree(): Branch[] {                                 
     return [                                                                                                                                          
       // trunk                                                        
@@ -40,4 +45,37 @@ export function generateTree(): Branch[] {
       // top-left                                                                                                                                     
       { a: [0, 1.4, 0], b: [-0.4, 2.3, -0.08], ra: 0.11, rb: 0.02, growth: 1, spawnTime: 0 },
     ]                                                                                                                                                 
-  }     
+  }*/
+ export function generateTree(params: {
+    depth: number           // levels of recursion
+    trunkLength: number
+    trunkRadius: number
+    lengthRatio: number     // child length relative to parent
+    radiusRatio: number     // ^^
+    tiltAngle: number       // in radians
+    childrenPerNode: number
+ }) : Branch[] {
+    const out: Branch[] = []
+    let childCounter = 0    // used for golden ratio indexing
+
+    function recurse(base: Vec3, dir: Vec3, length: number, radius: number, depth: number) {
+        const b = add(base, scale(dir, length))
+        const branch: Branch = {a: base, b: b, ra: radius, rb: radius * params.radiusRatio, growth: 1, spawnTime: 0}
+        out.push(branch)
+        if(depth == 0)
+            return
+
+        for(let i = 0; i < params.childrenPerNode; i++){
+            const t = (i + 1) / params.childrenPerNode
+            const sproutBase = add(base, scale(dir, length * t))
+
+            let newAngle = anyPerpendicular(dir)
+            newAngle = rotateAroundAxis(newAngle, dir, GOLDEN_ANGLE * childCounter++)
+            recurse(sproutBase, newAngle, length * params.lengthRatio, radius * params.radiusRatio, depth - 1)
+        }
+        
+    }
+
+    recurse([0, -1.5, 0], [0, 1, 0], params.trunkLength, params.trunkRadius, params.depth)
+    return out
+ }
