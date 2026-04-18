@@ -23,7 +23,7 @@ async function init(canvas:HTMLCanvasElement){
   const device = await adapter.requestDevice()
   const uniformBuffer = device.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST})
 
-  const branches = generateTree({depth: 2, trunkLength: 1.5, trunkRadius: 0.25, lengthRatio: 0.7, radiusRatio: 0.65, tiltAngle: Math.PI / 5, childrenPerNode: 3})
+  const branches = generateTree({depth: 3, trunkLength: 1.5, trunkRadius: 0.25, lengthRatio: 0.7, radiusRatio: 0.65, tiltAngle: Math.PI / 5, childrenPerNode: 3})
   const branchData = packBranches(branches)
 
   const storageBuffer = device.createBuffer({
