@@ -4,9 +4,25 @@ import {type Branch, packBranches, generateTree} from './sdf/tree'
 
 const canvas = document.getElementById('canvas') as HTMLCanvasElement;
 console.log(canvas)
+
+let az = 0, el = 0, dist = 3
+let dragging = false
+canvas.addEventListener('mousedown', () => {dragging = true})
+window.addEventListener('mouseup', () => {dragging = false})
+window.addEventListener('mousemove', (e) => {
+  if(!dragging) return
+  az -= e.movementX * 0.005
+  el += e.movementY * 0.005
+  el = Math.max(-Math.PI / 2 + 0.01, Math.min(Math.PI / 2 - 0.01, el))
+})
+canvas.addEventListener('wheel', (e) => {
+  dist = Math.max(1, dist + e.deltaY * 0.01)
+  e.preventDefault()
+})
 const {device, context, pipeline, uniformBuffer, bindGroup} = await init(canvas)
+
 function frame(t: number) {
-  device.queue.writeBuffer(uniformBuffer, 0, new Float32Array([t / 1000, 0, canvas.width, canvas.height]))
+  device.queue.writeBuffer(uniformBuffer, 0, new Float32Array([t / 1000, 0, canvas.width, canvas.height, az, el, dist]))
   render(device, context, pipeline, uniformBuffer, bindGroup)
   requestAnimationFrame(frame)
 }
@@ -21,10 +37,22 @@ async function init(canvas:HTMLCanvasElement){
     throw new Error("Adapter not found")
 
   const device = await adapter.requestDevice()
-  const uniformBuffer = device.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST})
+  const uniformBuffer = device.createBuffer({ size: 32, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST})
 
-  const branches = generateTree({depth: 3, trunkLength: 1.5, trunkRadius: 0.25, lengthRatio: 0.7, radiusRatio: 0.65, tiltAngle: Math.PI / 5, childrenPerNode: 3})
+  const branches = generateTree({depth:3, trunkLength: 2, trunkRadius: 0.25, lengthRatio: 0.45, radiusRatio: 0.55, tiltAngle: Math.PI / 4, childrenPerNode: 3})
   const branchData = packBranches(branches)
+  console.table(branches.map((b, i) => {      
+    const dx = b.b[0] - b.a[0]                                                                                                    
+    const dy = b.b[1] - b.a[1]                
+    const dz = b.b[2] - b.a[2]                                                                                                                        
+    const len = Math.hypot(dx, dy, dz)    
+    return {                                                                                                                                          
+      i,                                                                                                                                              
+      ax: b.a[0].toFixed(2), ay: b.a[1].toFixed(2), az: b.a[2].toFixed(2),                                                                            
+      dx: (dx/len).toFixed(3), dy: (dy/len).toFixed(3), dz: (dz/len).toFixed(3),                                                                      
+      len: len.toFixed(2),                                                                                                                            
+    }                                                                                                                                                 
+  }))
 
   const storageBuffer = device.createBuffer({
     size: branchData.byteLength,

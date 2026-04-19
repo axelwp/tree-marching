@@ -4,9 +4,11 @@ struct VSOut {
 }
 
 struct Uniforms {
-    time: f32,          //offset 0
-    resolution: vec2f,  //offset 4
-    // rounds up to 16 bytes
+    time: f32,          // offset 0
+    resolution: vec2f,  // offset 4
+    camAzimuth: f32,    // offset 12
+    camElevation: f32,  // offset 16
+    camDistance: f32,   // offset 20
 }
 
 @group(0) @binding(0) var<uniform> u: Uniforms;
@@ -146,15 +148,27 @@ fn fs(in: VSOut) -> @location(0) vec4f {
     var aspect = u.resolution.x / u.resolution.y; // using hardcoded 16:9 for now
     ndc.x *= aspect; 
 
-    var camera = vec3f(0, 0, -3); // camera, looking down at +z
+    let ce = cos(u.camElevation);
+    let se = sin(u.camElevation);
+    let ca = cos(u.camAzimuth);
+    let sa = sin(u.camAzimuth);
 
-    var pinhole = normalize(vec3f(ndc, 1.0));
+    let lookAt = vec3f(0.0, 0.5, 0.0);
+    let camPos = lookAt + u.camDistance * vec3f(ce * sa, se, ce * ca);
 
-    let t = march(camera, pinhole);
+    let forward = normalize(lookAt - camPos);
+    let right = normalize(cross(forward, vec3f(0, 1, 0)));
+    let up = cross(right, forward);
+
+    let fov = 0.6;
+
+    let rd = normalize(forward + right * ndc.x * fov + up * ndc.y * fov);
+
+    let t = march(camPos, rd);
     if(t < 0.0 ) {
         return vec4f(0.05, 0.05, 0.08, 1.0); // if it misses, return background color
     }
-    let p = camera + pinhole * t;
+    let p = camPos + rd * t;
     let n = getNormal(p);
 
     

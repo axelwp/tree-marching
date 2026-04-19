@@ -56,9 +56,8 @@ export function generateTree(): Branch[] {
     childrenPerNode: number
  }) : Branch[] {
     const out: Branch[] = []
-    let childCounter = 0    // used for golden ratio indexing
 
-    function recurse(base: Vec3, dir: Vec3, length: number, radius: number, depth: number) {
+    function recurse(base: Vec3, dir: Vec3, length: number, radius: number, depth: number, parentAzimuth: number) {
         const b = add(base, scale(dir, length))
         const branch: Branch = {a: base, b: b, ra: radius, rb: radius * params.radiusRatio, growth: 1, spawnTime: 0}
         out.push(branch)
@@ -66,16 +65,23 @@ export function generateTree(): Branch[] {
             return
 
         for(let i = 0; i < params.childrenPerNode; i++){
-            const t = (i + 1) / params.childrenPerNode
+            const isAxial = i == 0
+            const tilt = isAxial ? params.tiltAngle * 0.2 : params.tiltAngle
+            const childLength = length * (isAxial ? params.lengthRatio * 1.3 : params.lengthRatio)
+            const t = isAxial ? 1.0 : (i / params.childrenPerNode) * 0.7 + 0.3
             const sproutBase = add(base, scale(dir, length * t))
 
-            let newAngle = anyPerpendicular(dir)
-            newAngle = rotateAroundAxis(newAngle, dir, GOLDEN_ANGLE * childCounter++)
-            recurse(sproutBase, newAngle, length * params.lengthRatio, radius * params.radiusRatio, depth - 1)
+            const siblingAzimuth = (i / params.childrenPerNode) * 2 * Math.PI
+            const azimuth = parentAzimuth + siblingAzimuth
+
+            let perp = anyPerpendicular(dir)
+            let newAngle = rotateAroundAxis(dir, perp, tilt)
+            newAngle = rotateAroundAxis(newAngle, dir, azimuth)
+            recurse(sproutBase, newAngle, childLength, radius * params.radiusRatio, depth - 1, azimuth + GOLDEN_ANGLE)
         }
         
     }
 
-    recurse([0, -1.5, 0], [0, 1, 0], params.trunkLength, params.trunkRadius, params.depth)
+    recurse([0, -1.5, 0], [0, 1, 0], params.trunkLength, params.trunkRadius, params.depth, 0)
     return out
  }
