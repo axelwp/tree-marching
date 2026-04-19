@@ -2,6 +2,7 @@ import { type Vec3, scale, add, anyPerpendicular, rotateAroundAxis } from "../li
 
 
 const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5)) // ≈ 137.5° 
+const startFraction = 0.6
 // matches Branch struct in ../shaders/raymarch.wgsl
 export type Branch = {
     a: [number, number, number]
@@ -54,12 +55,13 @@ export function generateTree(): Branch[] {
     radiusRatio: number     // ^^
     tiltAngle: number       // in radians
     childrenPerNode: number
+    growthDuration: number
  }) : Branch[] {
     const out: Branch[] = []
 
-    function recurse(base: Vec3, dir: Vec3, length: number, radius: number, depth: number, parentAzimuth: number) {
+    function recurse(base: Vec3, dir: Vec3, length: number, radius: number, depth: number, parentAzimuth: number, parentSpawnTime: number) {
         const b = add(base, scale(dir, length))
-        const branch: Branch = {a: base, b: b, ra: radius, rb: radius * params.radiusRatio, growth: 1, spawnTime: 0}
+        const branch: Branch = {a: base, b: b, ra: radius, rb: radius * params.radiusRatio, growth: 1, spawnTime: parentSpawnTime}
         out.push(branch)
         if(depth == 0)
             return
@@ -74,14 +76,16 @@ export function generateTree(): Branch[] {
             const siblingAzimuth = (i / params.childrenPerNode) * 2 * Math.PI
             const azimuth = parentAzimuth + siblingAzimuth
 
+            const childSpawnTime = parentSpawnTime + params.growthDuration * startFraction
+
             let perp = anyPerpendicular(dir)
             let newAngle = rotateAroundAxis(dir, perp, tilt)
             newAngle = rotateAroundAxis(newAngle, dir, azimuth)
-            recurse(sproutBase, newAngle, childLength, radius * params.radiusRatio, depth - 1, azimuth + GOLDEN_ANGLE)
+            recurse(sproutBase, newAngle, childLength, radius * params.radiusRatio, depth - 1, azimuth + GOLDEN_ANGLE, childSpawnTime)
         }
         
     }
 
-    recurse([0, -1.5, 0], [0, 1, 0], params.trunkLength, params.trunkRadius, params.depth, 0)
+    recurse([0, -1.5, 0], [0, 1, 0], params.trunkLength, params.trunkRadius, params.depth, 0, 0)
     return out
  }

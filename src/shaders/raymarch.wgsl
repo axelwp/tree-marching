@@ -75,22 +75,28 @@ fn smin(a: f32, b: f32, k: f32) -> f32 { // where k is the blend radius
 
 fn sdScene(p: vec3f) -> f32 {
     let n = arrayLength(&branches);
-    var d = 1000.0;                                                                                                                                   
-    for (var i = 0u; i < n; i++) {                                    
-      let br = branches[i];                                                                                                                           
-      // cheap bounding sphere around the branch                                                                                                      
-      let mid = (br.a + br.b) * 0.5;                                                                                                                  
-      let halfLen = length(br.b - br.a) * 0.5;                                                                                                        
-      let bound = halfLen + max(br.ra, br.rb);                                                                                                        
-      let sphereDist = length(p - mid) - bound;
-                                                                                                                                                      
-      // far from this branch? skip the expensive op                  
-      if (sphereDist > 0.2) {  // 0.2 = smin blend radius, tune as needed                                                                             
-        d = min(d, sphereDist);                                       
-        continue;                                                                                                                                     
-      }                                                               
-                                                                                                                                                      
-      d = smin(d, sdRoundCone(p, br.a, br.b, br.ra, br.rb), 0.05);                                                                                    
+    var d = 1000.0;
+    var growthDuration = 1.0;
+    for (var i = 0u; i < n; i++) {
+        let br = branches[i];
+        // cheap bounding sphere around the branch
+        let mid = (br.a + br.b) * 0.5;
+        let halfLen = length(br.b - br.a) * 0.5;
+        let bound = halfLen + max(br.ra, br.rb);
+        let sphereDist = length(p - mid) - bound;
+
+        // skip smin if far from the branch
+        if (sphereDist > 0.2) {  // 0.2 = smin blend radius, tune as needed
+            d = min(d, sphereDist);
+            continue;
+        }
+
+        let growth = clamp((u.time - br.spawnTime) / growthDuration, 0.0, 1.0);
+        if (growth <= 0.0) { continue; }                                          // hasnt spawned yet
+        let bEff = mix(br.a, br.b, growth);
+        let rbEff = mix(br.ra, br.rb, growth);
+
+        d = smin(d, sdRoundCone(p, br.a, bEff, br.ra, rbEff), 0.05);
     }                
     return d;
 }

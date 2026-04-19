@@ -39,20 +39,8 @@ async function init(canvas:HTMLCanvasElement){
   const device = await adapter.requestDevice()
   const uniformBuffer = device.createBuffer({ size: 32, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST})
 
-  const branches = generateTree({depth:3, trunkLength: 2, trunkRadius: 0.25, lengthRatio: 0.45, radiusRatio: 0.55, tiltAngle: Math.PI / 4, childrenPerNode: 3})
+  const branches = generateTree({depth:3, trunkLength: 2, trunkRadius: 0.25, lengthRatio: 0.45, radiusRatio: 0.55, tiltAngle: Math.PI / 4, childrenPerNode: 3, growthDuration: 1.5})
   const branchData = packBranches(branches)
-  console.table(branches.map((b, i) => {      
-    const dx = b.b[0] - b.a[0]                                                                                                    
-    const dy = b.b[1] - b.a[1]                
-    const dz = b.b[2] - b.a[2]                                                                                                                        
-    const len = Math.hypot(dx, dy, dz)    
-    return {                                                                                                                                          
-      i,                                                                                                                                              
-      ax: b.a[0].toFixed(2), ay: b.a[1].toFixed(2), az: b.a[2].toFixed(2),                                                                            
-      dx: (dx/len).toFixed(3), dy: (dy/len).toFixed(3), dz: (dz/len).toFixed(3),                                                                      
-      len: len.toFixed(2),                                                                                                                            
-    }                                                                                                                                                 
-  }))
 
   const storageBuffer = device.createBuffer({
     size: branchData.byteLength,
