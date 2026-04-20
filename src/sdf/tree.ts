@@ -1,4 +1,4 @@
-import { type Vec3, scale, add, anyPerpendicular, rotateAroundAxis } from "../lib/vec3"
+import { type Vec3, scale, add, anyPerpendicular, rotateAroundAxis, normalize } from "../lib/vec3"
 
 
 const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5)) // ≈ 137.5° 
@@ -9,44 +9,27 @@ export type Branch = {
     ra: number
     b: [number, number, number]
     rb: number
+    c: [number, number, number]
     growth: number
     spawnTime: number
 }
 
 //flattens Branch[] into a Float32Array
 export function packBranches(branches: Branch[]): Float32Array {
-    const out = new Float32Array(branches.length * 12)
+    const out = new Float32Array(branches.length * 16)
     branches.forEach((br, i) => {
-        const o = i * 12
+        const o = i * 16
         out[o+0] = br.a[0]; out[o+1] = br.a[1]; out[o+2] = br.a[2]
         out[o+3] = br.ra
         out[o+4] = br.b[0]; out[o+5] = br.b[1]; out[o+6] = br.b[2]
         out[o+7] = br.rb
-        out[o+8] = br.growth
-        out[o+9] = br.spawnTime
+        out[o+8] = br.c[0]; out[o+9] = br.c[1]; out[o+10] = br.c[2]
+        out[o+11] = br.growth
+        out[o+12] = br.spawnTime
     })
     return out
 }
 
-
-// hardcoded from example tree in raymarch.wgsl
-/*
-export function generateTree(): Branch[] {                                 
-    return [                                                                                                                                          
-      // trunk                                                        
-      { a: [0, -1.5, 0], b: [0, 1.5, 0],     ra: 0.25, rb: 0.15, growth: 1, spawnTime: 0 },                                                           
-      // lowest branch                                                                                                                                
-      { a: [0, -0.2, 0], b: [1.2, 0.5, 0.2], ra: 0.17, rb: 0.02, growth: 1, spawnTime: 0 },
-      // offshoot from lowest branch                                                                                                                  
-      { a: [0.6, 0.1, 0.1], b: [1.1, 0, -0.2], ra: 0.08, rb: 0.02, growth: 1, spawnTime: 0 },
-      // left branch                                                                                                                                  
-      { a: [0, 0.3, 0], b: [-1.2, 0.8, 0.2], ra: 0.14, rb: 0.02, growth: 1, spawnTime: 0 },
-      // top-right                                                                                                                                    
-      { a: [0, 1.4, 0], b: [0.5, 2.1, -0.1], ra: 0.1, rb: 0.02, growth: 1, spawnTime: 0 },
-      // top-left                                                                                                                                     
-      { a: [0, 1.4, 0], b: [-0.4, 2.3, -0.08], ra: 0.11, rb: 0.02, growth: 1, spawnTime: 0 },
-    ]                                                                                                                                                 
-  }*/
  export function generateTree(params: {
     depth: number           // levels of recursion
     trunkLength: number
@@ -61,7 +44,10 @@ export function generateTree(): Branch[] {
 
     function recurse(base: Vec3, dir: Vec3, length: number, radius: number, depth: number, parentAzimuth: number, parentSpawnTime: number) {
         const b = add(base, scale(dir, length))
-        const branch: Branch = {a: base, b: b, ra: radius, rb: radius * params.radiusRatio, growth: 1, spawnTime: parentSpawnTime}
+        const perp = anyPerpendicular(dir)
+        const curveAmount = length * 0.2
+        const c = add(add(base, scale(dir, length/ 2)), scale(perp, curveAmount))
+        const branch: Branch = {a: base, b: b, ra: radius, rb: radius * params.radiusRatio, c: c,  growth: 1, spawnTime: parentSpawnTime}
         out.push(branch)
         if(depth == 0)
             return
@@ -71,16 +57,27 @@ export function generateTree(): Branch[] {
             const tilt = isAxial ? params.tiltAngle * 0.2 : params.tiltAngle
             const childLength = length * (isAxial ? params.lengthRatio * 1.3 : params.lengthRatio)
             const t = isAxial ? 1.0 : (i / params.childrenPerNode) * 0.7 + 0.3
-            const sproutBase = add(base, scale(dir, length * t))
+            const omt = 1 - t
+            const sproutBase: Vec3 = [
+                omt*omt*base[0] + 2*omt*t*c[0] + t*t*b[0],
+                omt*omt*base[1] + 2*omt*t*c[1] + t*t*b[1],
+                omt*omt*base[2] + 2*omt*t*c[2] + t*t*b[2],
+            ]
+            const tangentRaw: Vec3 = [
+                2*omt*(c[0]-base[0]) + 2*t*(b[0]-c[0]),
+                2*omt*(c[1]-base[1]) + 2*t*(b[1]-c[1]),
+                2*omt*(c[2]-base[2]) + 2*t*(b[2]-c[2]),
+            ]
+            const tangent = normalize(tangentRaw)
 
             const siblingAzimuth = (i / params.childrenPerNode) * 2 * Math.PI
             const azimuth = parentAzimuth + siblingAzimuth
 
             const childSpawnTime = parentSpawnTime + params.growthDuration * startFraction
 
-            let perp = anyPerpendicular(dir)
-            let newAngle = rotateAroundAxis(dir, perp, tilt)
-            newAngle = rotateAroundAxis(newAngle, dir, azimuth)
+            let perp = anyPerpendicular(tangent)
+            let newAngle = rotateAroundAxis(tangent, perp, tilt)
+            newAngle = rotateAroundAxis(newAngle, tangent, azimuth)
             recurse(sproutBase, newAngle, childLength, radius * params.radiusRatio, depth - 1, azimuth + GOLDEN_ANGLE, childSpawnTime)
         }
         

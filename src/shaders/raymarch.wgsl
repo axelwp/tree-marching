@@ -18,9 +18,10 @@ struct Branch {
     ra: f32,        //offset 12
     b: vec3f,       //offset 16
     rb: f32,        //offset 28
-    growth: f32,    //offset 32
-    spawnTime: f32  //offset 36
-    // rounds up to 48 bytes
+    c: vec3f,       //offset 32
+    growth: f32,    //offset 44
+    spawnTime: f32  //offset 48
+    // rounds up to 64 bytes
 }
 
 @group(0) @binding(1) var<storage, read> branches: array<Branch>;
@@ -68,6 +69,28 @@ fn sdRoundCone(p: vec3f, a: vec3f, b: vec3f, ra: f32, rb: f32) -> f32 {
     return (sqrt(x2 * a2 * il2) + y * rr) *il2 - ra;
 }
 
+fn sdBezier(p: vec3f, a: vec3f, c: vec3f, b: vec3f, ra: f32, rb: f32, growth: f32) -> f32 {
+    let N = 4u;
+    var d = 1e9;
+    var prevPoint = a;
+    var prevR = ra;
+    for (var i = 1u; i <= N; i++){
+        var t = f32(i) / f32(N);
+        var done = false;
+        if(t > growth) {
+            t = growth;
+            done = true;
+        }
+        let omt = 1.0 - t;
+        let pt = omt*omt*a + 2.0*omt*t*c + t*t*b;
+        let r = mix(ra, rb, t);
+        d = min(d, sdRoundCone(p, prevPoint, pt, prevR, r));
+        prevPoint = pt;
+        prevR = r;
+    }
+    return d;
+}
+
 fn smin(a: f32, b: f32, k: f32) -> f32 { // where k is the blend radius
     let h = max(k - abs(a - b), 0.0) / k;
     return min(a, b) - h * h * k * 0.25;
@@ -80,9 +103,9 @@ fn sdScene(p: vec3f) -> f32 {
     for (var i = 0u; i < n; i++) {
         let br = branches[i];
         // cheap bounding sphere around the branch
-        let mid = (br.a + br.b) * 0.5;
+        let mid = (br.a + br.b + br.c) / 3.0;
         let halfLen = length(br.b - br.a) * 0.5;
-        let bound = halfLen + max(br.ra, br.rb);
+        let bound = max(max(length(br.a - mid), length(br.b - mid)), length(br.c - mid)) + max(br.ra, br.rb);
         let sphereDist = length(p - mid) - bound;
 
         // skip smin if far from the branch
@@ -93,10 +116,8 @@ fn sdScene(p: vec3f) -> f32 {
 
         let growth = clamp((u.time - br.spawnTime) / growthDuration, 0.0, 1.0);
         if (growth <= 0.0) { continue; }                                          // hasnt spawned yet
-        let bEff = mix(br.a, br.b, growth);
-        let rbEff = mix(br.ra, br.rb, growth);
 
-        d = smin(d, sdRoundCone(p, br.a, bEff, br.ra, rbEff), 0.05);
+        d = smin(d, sdBezier(p, br.a, br.c, br.b, br.ra, br.rb, growth), 0.05);
     }                
     return d;
 }
