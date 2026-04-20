@@ -70,25 +70,59 @@ fn sdRoundCone(p: vec3f, a: vec3f, b: vec3f, ra: f32, rb: f32) -> f32 {
 }
 
 fn sdBezier(p: vec3f, a: vec3f, c: vec3f, b: vec3f, ra: f32, rb: f32, growth: f32) -> f32 {
-    let N = 4u;
-    var d = 1e9;
-    var prevPoint = a;
-    var prevR = ra;
-    for (var i = 1u; i <= N; i++){
-        var t = f32(i) / f32(N);
-        var done = false;
-        if(t > growth) {
-            t = growth;
-            done = true;
-        }
-        let omt = 1.0 - t;
-        let pt = omt*omt*a + 2.0*omt*t*c + t*t*b;
-        let r = mix(ra, rb, t);
-        d = min(d, sdRoundCone(p, prevPoint, pt, prevR, r));
-        prevPoint = pt;
-        prevR = r;
+    let u = c - a;
+    let v = a - 2.0 * c + b;
+    let w = a - p;
+
+    // normalize cubic: t³ + 3kx·t² + 3ky·t + kz = 0 
+    let kk = 1.0 / dot(v, v);
+    let kx = kk * dot(u, v);
+    let ky = kk * (2.0 * dot(u, u) + dot(w, v)) / 3.0;
+    let kz = kk * dot(w, u);
+
+    // depressed cubic after t = 2 - kx: s³ + 3p·s + q = 0
+    let p_ = ky - kx * kx;
+    let q_ = kx * (2.0 * kx * kx - 3.0 * ky) + kz;
+
+    // discriminant sign tells us which branch to take
+    let h = q_ * q_ + 4.0 * p_ * p_ * p_;
+
+    var t: f32;
+    if (h >= 0.0) {
+        // three real roots - trigonometric from
+        let sh = sqrt(h);
+        let xy = (vec2f(sh, -sh) - q_) * 0.5;
+        // real cube root
+        let uvc = sign(xy) * pow(abs(xy), vec2f(1.0 / 3.0));
+        t = clamp(uvc.x + uvc.y - kx, 0.0, 1.0);
+    } else {
+        // three real roots - trigonometric form
+        let z = sqrt(-p_);
+        let phi = acos(clamp(q_ / (p_ * z * 2.0), -1.0, 1.0)) / 3.0;
+        let m = cos(phi);
+        let n = sin(phi) * 1.732050808;     // sqrt(3)
+        let roots = clamp(vec3f(m + m, -n - m, n - m) * z - kx, vec3f(0.0), vec3f(1.0));
+
+        // evaluate each root, pick the smallest distance
+        let q0 = a + (2.0 * u + v * roots.x) * roots.x - p;
+        let q1 = a + (2.0 * u + v * roots.y) * roots.y - p;
+        let q2 = a + (2.0 * u + v * roots.z) * roots.z - p;
+        let d0 = dot(q0, q0);
+        let d1 = dot(q1, q1);
+        let d2 = dot(q2, q2);
+
+        var bestT = roots.x;
+        var bestD = d0;
+        if (d1 < bestD) { bestT = roots.y; bestD = d1; }
+        if (d2 < bestD) { bestT = roots.z; }
+        t = bestT;
     }
-    return d;
+    // growth clipping - cap at current growth
+    t = min(t, growth);
+
+    let pt = a + (2.0 * u + v * t) * t;
+    let rad = mix(ra, rb, t);
+    return length(pt - p) - rad;
 }
 
 fn smin(a: f32, b: f32, k: f32) -> f32 { // where k is the blend radius
