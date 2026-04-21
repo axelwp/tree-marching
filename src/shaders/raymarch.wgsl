@@ -70,8 +70,15 @@ fn sdRoundCone(p: vec3f, a: vec3f, b: vec3f, ra: f32, rb: f32) -> f32 {
 }
 
 fn sdBezier(p: vec3f, a: vec3f, c: vec3f, b: vec3f, ra: f32, rb: f32, growth: f32) -> f32 {
-    let u = c - a;
     let v = a - 2.0 * c + b;
+
+    // fix for a bug caused when a, c, and b are collinear, resulting in a value of 0 for v -> divide by 0 error in kk calc
+    if(dot(v, v) < 1e-6) {
+        let bEff = mix(a, b, growth);
+        let rbEff = mix(ra, rb, growth);
+        return sdRoundCone(p, a, bEff, ra, rbEff);
+    }
+    let u = c - a;
     let w = a - p;
 
     // normalize cubic: t³ + 3kx·t² + 3ky·t + kz = 0 
@@ -151,22 +158,20 @@ fn sdScene(p: vec3f) -> f32 {
         let growth = clamp((u.time - br.spawnTime) / growthDuration, 0.0, 1.0);
         if (growth <= 0.0) { continue; }                                          // hasnt spawned yet
 
-        d = smin(d, sdBezier(p, br.a, br.c, br.b, br.ra, br.rb, growth), 0.05);
+        d = smin(d, sdBezier(p, br.a, br.c, br.b, br.ra, br.rb, growth), 0.03);
     }                
     return d;
 }
 
-fn softShadow(ro: vec3f, rd: vec3f, maxt: f32, k: f32) -> f32 { // k controls penumbra softness (higher k -> harder shadows)
-    var res = 1.0;
-    var t = 0.02;
-    for (var i = 0; i < 32; i++) {
+fn hardShadow(ro: vec3f, rd: vec3f, maxt: f32) -> f32 {
+    var t = 0.05;
+    for (var i = 0; i < 48; i++) {
         let h = sdScene(ro + rd * t);
         if (h < 0.001) { return 0.0; }
-        res = min(res, k * h / t);
         t += h;
         if (t > maxt) { break; }
     }
-    return clamp(res, 0.0, 1.0);
+    return 1.0;
 }
 
 fn getNormal(p: vec3f) -> vec3f {
@@ -180,8 +185,8 @@ fn getNormal(p: vec3f) -> vec3f {
 
 
 fn march(ro: vec3f, rd: vec3f) -> f32 {
-    let scenceCenter = vec3f(0.0, 0.5, 0.0);
-    let sceneRadius = 3.0;
+    let scenceCenter = vec3f(0.0, 1.0, 0.0);
+    let sceneRadius = 4.0;
     let oc = ro - scenceCenter;
     let b = dot(oc, rd);
     let c = dot(oc, oc) - sceneRadius * sceneRadius;
@@ -214,7 +219,7 @@ fn fs(in: VSOut) -> @location(0) vec4f {
     let ca = cos(u.camAzimuth);
     let sa = sin(u.camAzimuth);
 
-    let lookAt = vec3f(0.0, 0.5, 0.0);
+    let lookAt = vec3f(0.0, 1.5, 0.0);
     let camPos = lookAt + u.camDistance * vec3f(ce * sa, se, ce * ca);
 
     let forward = normalize(lookAt - camPos);
@@ -234,9 +239,10 @@ fn fs(in: VSOut) -> @location(0) vec4f {
 
     
     let lightDir = normalize(vec3f(0.3, 0.3, -0.1)); //directional light
-    let shadow = softShadow(p + n * 0.1, lightDir, 20.0, 11.0);
-    let diffuse = max(dot(n, lightDir), 0.0) * shadow + 0.1; //ambient light
+    let shadow = hardShadow(p + n * 0.01, lightDir, 20.0);
+    let diffuse = max(dot(n, lightDir), 0.0) * shadow + 0.2; //ambient light
+    let color = diffuse;;
 
-    return vec4f(vec3f(diffuse), 1.0); // [-1, 1] -> [0, 1]
+    return vec4f(vec3f(color), 1.0); // [-1, 1] -> [0, 1]
 }
 

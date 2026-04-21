@@ -5,7 +5,7 @@ import {type Branch, packBranches, generateTree} from './sdf/tree'
 const canvas = document.getElementById('canvas') as HTMLCanvasElement;
 console.log(canvas)
 
-let az = 0, el = 0, dist = 3
+let az = 1, el = 0, dist = 8
 let dragging = false
 canvas.addEventListener('mousedown', () => {dragging = true})
 window.addEventListener('mouseup', () => {dragging = false})
@@ -39,7 +39,7 @@ async function init(canvas:HTMLCanvasElement){
   const device = await adapter.requestDevice()
   const uniformBuffer = device.createBuffer({ size: 32, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST})
 
-  const branches = generateTree({depth:3, trunkLength: 2, trunkRadius: 0.25, lengthRatio: 0.45, radiusRatio: 0.55, tiltAngle: Math.PI / 4, childrenPerNode: 3, growthDuration: 1.5})
+  const branches = generateTree({depth:3, trunkLength: 2, trunkRadius: 0.25, lengthRatio: 0.55, radiusRatio: 0.55, tiltAngle: Math.PI / 4, childrenPerNode: 3, growthDuration: 1.5, gravity: 1.0})
   const branchData = packBranches(branches)
 
   const storageBuffer = device.createBuffer({
