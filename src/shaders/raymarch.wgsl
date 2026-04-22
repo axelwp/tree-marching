@@ -9,6 +9,7 @@ struct Uniforms {
     camAzimuth: f32,    // offset 12
     camElevation: f32,  // offset 16
     camDistance: f32,   // offset 20
+    numBranches: u32,   //offset 24
 }
 
 @group(0) @binding(0) var<uniform> u: Uniforms;
@@ -138,7 +139,7 @@ fn smin(a: f32, b: f32, k: f32) -> f32 { // where k is the blend radius
 }
 
 fn sdScene(p: vec3f) -> f32 {
-    let n = arrayLength(&branches);
+    let n = u.numBranches;
     var d = 1000.0;
     var growthDuration = 1.0;
     for (var i = 0u; i < n; i++) {

@@ -1,12 +1,42 @@
 import './style.css'
+import {Pane} from 'tweakpane'
 import shaderSource from './shaders/raymarch.wgsl?raw' 
-import {type Branch, packBranches, generateTree} from './sdf/tree'
+import {type TreeParams, packBranches, generateTree} from './sdf/tree'
+
+const MAX_BRANCHES = 512
+const BRANCH_STRIDE = 64
+
+const treeParams: TreeParams = {
+  depth:3, 
+  trunkLength: 2, 
+  trunkRadius: 0.25, 
+  lengthRatio: 0.6, 
+  radiusRatio: 0.55, 
+  tiltAngle: Math.PI / 4, 
+  childrenPerNode: 3, 
+  growthDuration: 1.5, 
+  gravity: 1.0
+}
 
 const canvas = document.getElementById('canvas') as HTMLCanvasElement;
-console.log(canvas)
+
+if(!navigator.gpu)
+    throw new Error("GPU not found");
+
+const adapter = await navigator.gpu.requestAdapter()
+if(!adapter)
+  throw new Error("Adapter not found")
+
+const device = await adapter.requestDevice()
+
+const storageBuffer = device.createBuffer({
+  size: MAX_BRANCHES * BRANCH_STRIDE,
+  usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
+})
 
 let az = 1, el = 0, dist = 8
 let dragging = false
+let currentBranchCount = 0
 canvas.addEventListener('mousedown', () => {dragging = true})
 window.addEventListener('mouseup', () => {dragging = false})
 window.addEventListener('mousemove', (e) => {
@@ -19,33 +49,33 @@ canvas.addEventListener('wheel', (e) => {
   dist = Math.max(1, dist + e.deltaY * 0.01)
   e.preventDefault()
 })
-const {device, context, pipeline, uniformBuffer, bindGroup} = await init(canvas)
+const {context, pipeline, uniformBuffer, bindGroup} = await init(canvas)
 
 function frame(t: number) {
-  device.queue.writeBuffer(uniformBuffer, 0, new Float32Array([t / 1000, 0, canvas.width, canvas.height, az, el, dist]))
+  canvas.width = canvas.clientWidth * devicePixelRatio
+  canvas.height = canvas.clientHeight * devicePixelRatio
+  const uniforms = new ArrayBuffer(48)
+  const f = new Float32Array(uniforms)
+  const u = new Uint32Array(uniforms)
+  f[0] = t / 1000
+  f[2] = canvas.width
+  f[3] = canvas.height
+  f[4] = az; f[5] = el; f[6] = dist
+  u[7] = currentBranchCount
+  device.queue.writeBuffer(uniformBuffer, 0, uniforms)
   render(device, context, pipeline, uniformBuffer, bindGroup)
   requestAnimationFrame(frame)
 }
 requestAnimationFrame(frame)
 
 async function init(canvas:HTMLCanvasElement){
-  if(!navigator.gpu)
-    throw new Error("GPU not found");
+  
+  const uniformBuffer = device.createBuffer({ size: 48, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST})
 
-  const adapter = await navigator.gpu.requestAdapter()
-  if(!adapter)
-    throw new Error("Adapter not found")
-
-  const device = await adapter.requestDevice()
-  const uniformBuffer = device.createBuffer({ size: 32, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST})
-
-  const branches = generateTree({depth:3, trunkLength: 2, trunkRadius: 0.25, lengthRatio: 0.55, radiusRatio: 0.55, tiltAngle: Math.PI / 4, childrenPerNode: 3, growthDuration: 1.5, gravity: 1.0})
+  const branches = generateTree(treeParams)
   const branchData = packBranches(branches)
+  currentBranchCount = branches.length
 
-  const storageBuffer = device.createBuffer({
-    size: branchData.byteLength,
-    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
-  })
   device.queue.writeBuffer(storageBuffer, 0, branchData.buffer as ArrayBuffer)
   
 
@@ -68,7 +98,7 @@ async function init(canvas:HTMLCanvasElement){
     ],
   })
 
-  return{ device, context, pipeline, uniformBuffer, storageBuffer, bindGroup }
+  return{context, pipeline, uniformBuffer, storageBuffer, bindGroup }
 }
 
 function render(device: GPUDevice, context:GPUCanvasContext, pipeline:GPURenderPipeline, uniformBuffer:GPUBuffer, bindGroup: GPUBindGroup){
@@ -85,3 +115,20 @@ function render(device: GPUDevice, context:GPUCanvasContext, pipeline:GPURenderP
   device.queue.submit([encoder.finish()])
 }
 
+function regenerateTree(){
+  const branches = generateTree(treeParams)
+  const branchData = packBranches(branches)
+  currentBranchCount = branches.length
+  device.queue.writeBuffer(storageBuffer, 0, branchData.buffer as ArrayBuffer)
+}
+const pane = new Pane({title: 'Tree Parameters'})
+pane.addBinding(treeParams, 'depth', { min: 1, max: 4, step: 1 }) //Set max to 3 because that's all my system can handle - could push this higher if you have a good GPU
+pane.addBinding(treeParams, 'trunkLength', { min: 0.5, max: 2.25})
+pane.addBinding(treeParams, 'trunkRadius', { min: 0.05, max: 0.5})
+pane.addBinding(treeParams, 'lengthRatio', { min: 0.3, max: 0.9})
+pane.addBinding(treeParams, 'radiusRatio', { min: 0.3, max: 0.9})
+pane.addBinding(treeParams, 'tiltAngle', { min: 0, max: Math.PI / 2})
+pane.addBinding(treeParams, 'childrenPerNode', { min: 1, max: 4, step: 1 })
+pane.addBinding(treeParams, 'gravity', { min: 0, max: 5})
+
+pane.on('change', () => regenerateTree())

@@ -3,8 +3,20 @@ import { type Vec3, scale, add, anyPerpendicular, rotateAroundAxis, normalize } 
 
 const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5)) // ≈ 137.5° 
 const startFraction = 0.6
+
+export type TreeParams = {
+    depth: number           // levels of recursion
+    trunkLength: number
+    trunkRadius: number
+    lengthRatio: number     // child length relative to parent
+    radiusRatio: number     // ^^
+    tiltAngle: number       // in radians
+    childrenPerNode: number
+    growthDuration: number
+    gravity: number
+}
 // matches Branch struct in ../shaders/raymarch.wgsl
-export type Branch = {
+type Branch = {
     a: [number, number, number]
     ra: number
     b: [number, number, number]
@@ -39,17 +51,7 @@ export function packBranches(branches: Branch[]): Float32Array {
     return out
 }
 
- export function generateTree(params: {
-    depth: number           // levels of recursion
-    trunkLength: number
-    trunkRadius: number
-    lengthRatio: number     // child length relative to parent
-    radiusRatio: number     // ^^
-    tiltAngle: number       // in radians
-    childrenPerNode: number
-    growthDuration: number
-    gravity: number
- }) : Branch[] {
+ export function generateTree(params: TreeParams) : Branch[] {
     const out: Branch[] = []
 
     function generateChain(
